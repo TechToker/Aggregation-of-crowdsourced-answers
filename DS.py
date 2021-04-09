@@ -1,7 +1,7 @@
 import csv
 
-crowd_set_path = "Source/TlkAgg2/crowd_labels1.tsv"
-#crowd_set_path = "Source/Results.tsv"
+crowd_set_path = "Source/TlkAgg2/crowd_labels.tsv"
+#crowd_set_path = "Source/crowd_labels_test.tsv"
 
 # Key - task id; Value - dictionary <worker_id, anw>
 all_data = {}
@@ -48,11 +48,9 @@ def GetMajorityVoting(data):
 
 # Calculate majority voting probability
 all_data_mv = GetMajorityVoting(all_data)
-#print(all_data_mv)
+
 
 # Key - worker_id; Value - dictionary with all answers prob
-
-
 def UpdateWorkerErrors(all_worker_anws, worker_actual_anw, others_votes_probability):
     if worker_actual_anw in all_worker_anws:
 
@@ -60,10 +58,8 @@ def UpdateWorkerErrors(all_worker_anws, worker_actual_anw, others_votes_probabil
             if excepted_anw not in all_worker_anws[worker_actual_anw]:
                 all_worker_anws[worker_actual_anw][excepted_anw] = 0
 
-            #print(f"Add value: A:[{worker_actual_anw}] E:[{excepted_anw}] {all_worker_anws[worker_actual_anw][excepted_anw]} + {others_votes_probability[excepted_anw]} = {all_worker_anws[worker_actual_anw][excepted_anw] + others_votes_probability[excepted_anw]}")
             all_worker_anws[worker_actual_anw][excepted_anw] += others_votes_probability[excepted_anw]
     else:
-        #print(f"Set: A:[{worker_actual_anw}] {others_votes_probability}")
         all_worker_anws[worker_actual_anw] = others_votes_probability.copy()
 
     return all_worker_anws
@@ -73,7 +69,6 @@ def CalculateWorkerErrors(data_with_mv):
     workers_errors = {}
 
     for task_id in data_with_mv:
-        #print(f"Tsk_id: {task_id}")
         all_task_anw = all_data[task_id].copy()
 
         for task_worker_id in all_task_anw:
@@ -85,19 +80,12 @@ def CalculateWorkerErrors(data_with_mv):
             if task_worker_id in workers_errors:
                 # Update error-table
                 all_worker_answers = workers_errors[task_worker_id]
-                #print(f"Update worker: {task_worker_id}; all anw: {all_worker_answers}")
                 workers_errors[task_worker_id] = UpdateWorkerErrors(all_worker_answers, actual_anw, other_workers_probability_votes)
 
             else:
                 # Add new data in dictionary
                 workers_errors[task_worker_id] = {actual_anw: other_workers_probability_votes.copy()}
-                #print(f"Add new worker: {task_worker_id}; value: {workers_errors[task_worker_id]}")
 
-            #print()
-            #print(f"step: {workers_errors}")
-            #print()
-
-        #print()
     return workers_errors
 
 
@@ -107,24 +95,19 @@ anw = CalculateWorkerErrors(all_data_mv)
 def Normalization(worker_err_table):
 
     for worker_id in worker_err_table:
-
         # Find sum
         all_worker_anw = worker_err_table[worker_id]
 
         sum_of_unique_excepted_anw = {}
         for actual_anw in all_worker_anw:
             for expected_anw in all_worker_anw[actual_anw]:
-                #print(f"[{worker_id}] Actual: {actual_anw}; Expected: {expected_anw}")
                 value = all_worker_anw[actual_anw][expected_anw]
 
                 if expected_anw in sum_of_unique_excepted_anw:
-                    #print(f"WorkerPls: [{worker_id}]; ev={expected_anw}; cur={sum_of_unique_excepted_anw[expected_anw]} val={value} = {sum_of_unique_excepted_anw[expected_anw] + value}")
                     sum_of_unique_excepted_anw[expected_anw] += value
                 else:
-                    #print(f"WorkerAdd: [{worker_id}]; ev={expected_anw}; val={value}")
                     sum_of_unique_excepted_anw[expected_anw] = value
 
-        #print(f"W_anw: {all_worker_anw} Sum: {sum_of_unique_excepted_anw}")
         # Norm
         for actual_anw in all_worker_anw:
             for expected_anw in all_worker_anw[actual_anw]:
@@ -134,17 +117,12 @@ def Normalization(worker_err_table):
 
                 all_worker_anw[actual_anw][expected_anw] /= sum_of_unique_excepted_anw[expected_anw]
 
-        #print("")
-        #worker_errors_norm[worker_id] = sum_of_unique_excepted_anw
-
     return worker_err_table
 
 
 worker_errors = Normalization(anw)
 
-
 # Continue of M-step; Calculate Prior
-
 def GetPriors(mv):
     priors = {}
     for task_id in mv:
@@ -163,12 +141,8 @@ def GetPriors(mv):
 
 
 priors = GetPriors(all_data_mv)
-# print(priors)
-# print()
 
 # E-step
-
-
 def mvRecalculation(priors, worker_errors):
     recalculated_mv = {}
 
@@ -179,43 +153,32 @@ def mvRecalculation(priors, worker_errors):
         for worker_id in all_data[task_id]:
             worker_anw = all_data[task_id][worker_id]
 
-            # print(f"id: [{worker_id}]")
-            # print(f"Worker[{worker_id}]: Err:{worker_errors[worker_id]}; Anw: {worker_anw};")
-
             worker_actual_anws = worker_errors[worker_id][worker_anw]
 
-            #print(f"worker anw: {worker_actual_anws}")
             for worker_act_anw in recalculated_mv[task_id]:
                 value_to_multy = 0
 
                 if worker_act_anw in worker_actual_anws:
                     value_to_multy = worker_actual_anws[worker_act_anw]
 
-                #print(f"[t:{task_id}]; [w:{worker_id}] [anw:{worker_act_anw}] {recalculated_mv[task_id][worker_act_anw]} * {value_to_multy} = {recalculated_mv[task_id][worker_act_anw] * value_to_multy}")
                 recalculated_mv[task_id][worker_act_anw] *= value_to_multy
 
-        #print(f"Rcc: {recalculated_mv[task_id]}")
         # Normalization
         sum_rec_mv = sum(list(recalculated_mv[task_id].values()))
 
         for anw in recalculated_mv[task_id]:
             recalculated_mv[task_id][anw] /= sum_rec_mv
 
-        #print(f"Rcc norm: {recalculated_mv[task_id]}")
     return recalculated_mv
+
 
 print("Iteration 1")
 recalculated_mv = mvRecalculation(priors, worker_errors)
 
-# Iteration 2
 print("Iteration 2")
 anw = CalculateWorkerErrors(recalculated_mv)
 worker_errors = Normalization(anw)
-
-#print(f"w1: {worker_errors['w1']}")
-
 new_priors = GetPriors(recalculated_mv)
-
 new_mv = mvRecalculation(new_priors, worker_errors)
 
 
@@ -223,8 +186,6 @@ def GetFinalAnw(mv):
     final_anws = {}
 
     for task_id in mv:
-        #print(mv[task_id])
-
         final_anw = -1
         bigger_prob = -1
 
@@ -241,7 +202,7 @@ def GetFinalAnw(mv):
 final_answers = GetFinalAnw(new_mv)
 
 
-with open('AggRes.tsv', 'wt', newline='') as out_file:
+with open('AggregatedRes.tsv', 'wt', newline='') as out_file:
     tsv_writer = csv.writer(out_file, delimiter='\t')
 
     for key in final_answers:

@@ -1,6 +1,5 @@
 import csv
 
-#golden_set_path = "Source/TlkAgg2/golden_labels.tsv"
 crowd_set_path = "Source/TlkAgg5/crowd_labels.tsv"
 
 # Key - task; Value - list of anw
@@ -33,7 +32,7 @@ for key in crowd_dic:
 
     anw_list[key] = most_freq_anw
 
-with open('TlkAgg5/mv.tsv', 'wt', newline='') as out_file:
+with open('AggregatedRes.tsv', 'wt', newline='') as out_file:
     tsv_writer = csv.writer(out_file, delimiter='\t')
 
     for key in anw_list:
